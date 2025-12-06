@@ -52,7 +52,13 @@ with st.sidebar:
         api_key = st.text_input("Anthropic API Key", type="password", value=os.getenv("ANTHROPIC_API_KEY", ""))
         selected_model = st.selectbox(
             "Select Model",
-            ["claude-3-5-sonnet-20241022", "claude-3-5-haiku-20241022", "claude-3-opus-20240229"],
+            [
+                "claude-sonnet-4-5-20250929",
+                "claude-sonnet-4-20250514",
+                "claude-opus-4-5-20251120",
+                "claude-opus-4-1-20250805",
+                "claude-opus-4-20250514"
+            ],
             index=0
         )
         if api_key:
@@ -64,7 +70,7 @@ with st.sidebar:
         api_key = st.text_input("Google API Key", type="password", value=os.getenv("GOOGLE_API_KEY", ""))
         selected_model = st.selectbox(
             "Select Model",
-            ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+            ["gemini-3-pro-preview", "gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
             index=0
         )
         if api_key:
@@ -73,8 +79,90 @@ with st.sidebar:
             st.warning("⚠️ Please enter your Google API key")
 
     st.divider()
-    if st.button("Clear Chat History"):
-        st.session_state.messages = []
+
+    # Additional Settings
+    st.subheader("Chat Settings")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🗑️ Clear", use_container_width=True):
+            st.session_state.messages = []
+            st.rerun()
+
+    with col2:
+        if st.session_state.get("messages"):
+            # Create downloadable chat history
+            import json
+            from datetime import datetime
+
+            chat_data = {
+                "provider": provider,
+                "model": selected_model,
+                "timestamp": datetime.now().isoformat(),
+                "messages": st.session_state.messages
+            }
+
+            chat_json = json.dumps(chat_data, indent=2)
+            st.download_button(
+                label="💾 Export",
+                data=chat_json,
+                file_name=f"health_chat_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json",
+                use_container_width=True
+            )
+
+    # Display chat statistics
+    if st.session_state.get("messages"):
+        msg_count = len(st.session_state.messages)
+        user_msgs = len([m for m in st.session_state.messages if m["role"] == "user"])
+        st.caption(f"💬 Messages: {msg_count} ({user_msgs} questions)")
+
+    st.divider()
+
+    # Information section
+    with st.expander("ℹ️ About This App"):
+        st.markdown("""
+        **Public Health Educator** is an AI-powered health education assistant.
+
+        **Features:**
+        - Multiple AI provider support (Ollama, OpenAI, Anthropic, Google Gemini)
+        - Evidence-based health information
+        - Privacy-focused (local Ollama option)
+        - Grade 8 reading level explanations
+
+        **Important:**
+        - This is NOT a substitute for professional medical advice
+        - Always consult healthcare professionals for medical concerns
+        - Information is for educational purposes only
+        """)
+
+    with st.expander("🔑 API Key Setup"):
+        st.markdown("""
+        **Option 1: Enter directly in the app** (above)
+
+        **Option 2: Set environment variables:**
+        ```bash
+        # Windows (PowerShell)
+        $env:OPENAI_API_KEY="your-key-here"
+        $env:ANTHROPIC_API_KEY="your-key-here"
+        $env:GOOGLE_API_KEY="your-key-here"
+
+        # Linux/Mac
+        export OPENAI_API_KEY="your-key-here"
+        export ANTHROPIC_API_KEY="your-key-here"
+        export GOOGLE_API_KEY="your-key-here"
+        ```
+
+        **Get API Keys:**
+        - OpenAI: https://platform.openai.com/api-keys
+        - Anthropic: https://console.anthropic.com/
+        - Google: https://aistudio.google.com/app/apikey
+        """)
+
+    # Provider info
+    st.divider()
+    st.caption(f"🤖 Provider: {provider}")
+    st.caption(f"📦 Model: {selected_model}")
 
 # --- SYSTEM PERSONA ---
 # This instruction forces the AI to behave as a health educator.
@@ -91,6 +179,12 @@ Your constraints:
 # --- CHAT LOGIC ---
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+# Welcome message for new users
+if not st.session_state.messages:
+    st.info("""
+    👋 **Welcome to Public Health Educator!**
+""")
 
 # Display chat history
 for message in st.session_state.messages:
