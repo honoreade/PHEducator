@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🏥 Public Health Educator</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <h2>⚙️ Settings</h2>
+
+
+
+            <div class="setting-group">
+                <label for="provider">Select Provider</label>
+                <select id="provider">
+                    <option value="ollama">Ollama (Local)</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="github">GitHub Models</option>
+                    <option value="perplexity">Perplexity</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label for="apiKey">API Key</label>
+                <div class="api-key-container">
+                    <input type="password" id="apiKey" placeholder="Enter your API key">
+                    <button type="button" id="toggleApiKey" class="toggle-visibility" title="Show/Hide API Key">
+                        👁️
+                    </button>
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label for="model">Select Model</label>
+                <select id="model">
+                    <!-- Models will be populated dynamically -->
+                </select>
+            </div>
+
+            <div class="status" id="status"></div>
+
+            <div class="button-group">
+                <button id="clearBtn" class="btn btn-secondary">🗑️ Clear Chat</button>
+                <button id="exportBtn" class="btn btn-secondary">💾 Export</button>
+            </div>
+
+            <div class="setting-group">
+                <label>
+                    <input type="checkbox" id="debugToggle" style="width: auto; margin-right: 5px;">
+                    Enable Debug Mode
+                </label>
+                <small style="color: #666; display: block; margin-top: 5px;">
+                    Shows detailed logs in browser console (F12)
+                </small>
+            </div>
+
+            <div class="stats" id="stats"></div>
+
+            <div class="info">
+                <details>
+                    <summary>ℹ️ About This App</summary>
+                    <p><strong>Public Health Educator</strong> is an AI-powered health education assistant.</p>
+                    <ul>
+                        <li>Multiple AI provider support</li>
+                        <li>Evidence-based health information</li>
+                        <li>Grade 8 reading level explanations</li>
+                    </ul>
+                    <p><strong>Important:</strong> This is NOT a substitute for professional medical advice.</p>
+                </details>
+            </div>
+        </aside>
+        <div class="sidebar-resizer" id="sidebarResizer"></div>
+
+        <!-- Main Chat Area -->
+        <main class="chat-container">
+            <header>
+                <button class="theme-toggle" id="themeToggle" title="Switch theme">
+                    <svg class="icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="5"/>
+                        <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                    </svg>
+                    <svg class="icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                </button>
+                <div class="header-text">
+                    <h1>🏥 Public Health Educator</h1>
+                    <p class="subtitle">Powered by Multiple AI Providers</p>
+                </div>
+            </header>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="welcome-message">
+                    <h3>👋 Welcome to Public Health Educator!</h3>
+                    <p>Ask me questions about health topics, disease prevention, nutrition, mental health, and more.</p>
+                    <p class="disclaimer">⚠️ <strong>Remember:</strong> I'm an AI assistant for educational purposes only. Always consult healthcare professionals for medical advice.</p>
+                </div>
+            </div>
+
+            <div class="chat-input-container">
+                <div class="input-wrapper">
+                    <textarea id="chatInput" placeholder="Ask a health question..." rows="1"></textarea>
+                </div>
+                <button id="sendBtn" class="btn btn-primary" title="Send"></button>
+            </div>
+            <p style="text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 8px;">⚠️ Disclaimer: I am an AI language model and not a medical professional. </p>
+        </main>
+    </div>
+
+    <!-- Debug Console (Press F12 or right-click > Inspect to see browser console for detailed logs) -->
+    <div style="position: fixed; bottom: 10px; right: 10px; background: rgba(0,0,0,0.8); color: #0f0; padding: 10px; border-radius: 5px; font-family: monospace; font-size: 11px; max-width: 300px; display: none;" id="debugPanel">
+        <div style="color: #fff; font-weight: bold; margin-bottom: 5px;">Debug Info:</div>
+        <div id="debugContent"></div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+
