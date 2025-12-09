@@ -1,15 +1,22 @@
 // PHEducator Web - Complete Multi-Provider AI Chat
+// Version: Fixed Models + Typewriter Effect + Friendly Error Messages + API Links
+
+// -----------------------------------------------------------------------------
+// CONFIGURATION & CONSTANTS
+// -----------------------------------------------------------------------------
+
 // Model configurations for each provider
+// Note: GitHub models are specified by ID only (no vendor prefix) to prevent errors
 const MODELS = {
     ollama: [], // Dynamically loaded from local Ollama instance
     openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     anthropic: ['claude-sonnet-4-5-20250929', 'claude-sonnet-4-20250514', 'claude-opus-4-5-20251120', 'claude-opus-4-1-20250805'],
     gemini: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'],
-    github: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'meta/Llama-3.3-70B-Instruct', 'microsoft/Phi-4'],
+    github: ['gpt-4o', 'gpt-4o-mini', 'Llama-3.3-70B-Instruct', 'Phi-4'], 
     perplexity: ['sonar', 'sonar-pro', 'sonar-reasoning', 'sonar-reasoning-pro']
 };
 
-// System prompt for health education
+// System prompt enforcing the Health Educator persona and constraints
 const SYSTEM_PROMPT = `You are a compassionate, accurate, and responsible Public Health Educator.
 Your constraints:
 1. Explain concepts simply and brief.
@@ -28,18 +35,33 @@ Please ask me a health-related question instead."
 
 NEVER make exceptions. NEVER answer non-health questions even if the user insists.`;
 
-// State variables
-let currentProvider = 'ollama';
+// NEW FEATURE: Direct links to generate API keys for each provider
+const API_KEY_URLS = {
+    openai: 'https://platform.openai.com/api-keys',
+    anthropic: 'https://console.anthropic.com/settings/keys',
+    gemini: 'https://aistudio.google.com/app/apikey',
+    github: 'https://github.com/settings/personal-access-tokens',
+    perplexity: 'https://www.perplexity.ai/settings/api'
+};
+
+// -----------------------------------------------------------------------------
+// STATE MANAGEMENT
+// -----------------------------------------------------------------------------
+
+let currentProvider = 'gemini'; // Default set to Gemini as requested
 let currentModel = '';
 let apiKey = '';
-let messages = [];
+let messages = []; // Stores conversation history
 let ollamaConnected = false;
 
-// DOM Elements
+// -----------------------------------------------------------------------------
+// DOM ELEMENTS
+// -----------------------------------------------------------------------------
+
 const providerSelect = document.getElementById('provider');
 const modelSelect = document.getElementById('model');
 const apiKeyInput = document.getElementById('apiKey');
-const apiKeyContainer = apiKeyInput ? apiKeyInput.closest('.setting-group') : null;
+const apiKeyContainer = document.getElementById('apiKeyGroup'); // Container for toggling visibility
 const statusDiv = document.getElementById('status');
 const chatMessages = document.getElementById('chatMessages');
 const chatInput = document.getElementById('chatInput');
@@ -47,16 +69,23 @@ const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 const exportBtn = document.getElementById('exportBtn');
 const toggleApiKeyBtn = document.getElementById('toggleApiKey');
+const getApiKeyLink = document.getElementById('getApiKeyLink'); // Link to provider's key page
 
-// Initialize app
+// -----------------------------------------------------------------------------
+// INITIALIZATION
+// -----------------------------------------------------------------------------
+
 async function init() {
+    // Load saved preferences (provider, model, key, theme)
     await loadFromLocalStorage();
 
+    // Event Listeners for Settings
     providerSelect.addEventListener('change', handleProviderChange);
     modelSelect.addEventListener('change', handleModelChange);
     if (apiKeyInput) apiKeyInput.addEventListener('input', handleApiKeyChange);
+    
+    // Event Listeners for Chat
     sendBtn.addEventListener('click', sendMessage);
-
     chatInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -64,7 +93,7 @@ async function init() {
         }
     });
 
-    // Clear chat button
+    // Clear Chat Logic
     if (clearBtn) {
         clearBtn.addEventListener('click', () => {
             messages = [];
@@ -78,7 +107,7 @@ async function init() {
         });
     }
 
-    // Export chat button
+    // Export Chat Logic
     if (exportBtn) {
         exportBtn.addEventListener('click', () => {
             if (messages.length === 0) {
@@ -96,7 +125,7 @@ async function init() {
         });
     }
 
-    // Toggle API key visibility
+    // API Key Show/Hide Toggle
     if (toggleApiKeyBtn && apiKeyInput) {
         toggleApiKeyBtn.addEventListener('click', () => {
             apiKeyInput.type = apiKeyInput.type === 'password' ? 'text' : 'password';
@@ -104,10 +133,15 @@ async function init() {
         });
     }
 
+    // Initial UI Setup
     updateApiKeyVisibility();
 }
 
-// Fetch Ollama models from local instance
+// -----------------------------------------------------------------------------
+// MODEL & PROVIDER LOGIC
+// -----------------------------------------------------------------------------
+
+// Fetch Ollama models from local instance (127.0.0.1:11434)
 async function fetchOllamaModels() {
     try {
         const res = await fetch('http://127.0.0.1:11434/api/tags');
@@ -126,7 +160,7 @@ async function fetchOllamaModels() {
     }
 }
 
-// Update model dropdown based on provider
+// Update model dropdown options based on selected provider
 async function updateModels() {
     currentProvider = providerSelect.value;
     modelSelect.innerHTML = '';
@@ -151,6 +185,7 @@ async function updateModels() {
             currentModel = '';
         }
     } else {
+        // Standard providers (OpenAI, Gemini, etc.)
         MODELS[currentProvider].forEach(model => {
             const opt = document.createElement('option');
             opt.value = model;
@@ -160,24 +195,25 @@ async function updateModels() {
         modelSelect.disabled = false;
         currentModel = MODELS[currentProvider][0];
     }
-
     updateStatus();
 }
 
+// -----------------------------------------------------------------------------
+// EVENT HANDLERS
+// -----------------------------------------------------------------------------
 
-// Handle provider change
 async function handleProviderChange() {
     await updateModels();
     updateApiKeyVisibility();
 
-    // Load saved model for this provider
+    // Restore saved model for this provider if exists
     const savedModel = localStorage.getItem(`ph_model_${currentProvider}`);
     if (savedModel && (currentProvider === 'ollama' ? MODELS.ollama.includes(savedModel) : MODELS[currentProvider].includes(savedModel))) {
         modelSelect.value = savedModel;
         currentModel = savedModel;
     }
 
-    // Load saved API key for this provider
+    // Restore saved API key for this provider
     const savedApiKey = localStorage.getItem(`ph_apikey_${currentProvider}`);
     if (savedApiKey && apiKeyInput) {
         apiKeyInput.value = savedApiKey;
@@ -191,28 +227,34 @@ async function handleProviderChange() {
     saveToLocalStorage();
 }
 
-// Handle model change
 function handleModelChange() {
     currentModel = modelSelect.value;
     saveToLocalStorage();
     updateStatus();
 }
 
-// Handle API key change
 function handleApiKeyChange() {
     apiKey = apiKeyInput.value;
     saveToLocalStorage();
     updateStatus();
 }
 
-// Update API key visibility (hide for Ollama)
+// NEW FEATURE: Update UI based on provider (Hide Key for Ollama, Update Link)
 function updateApiKeyVisibility() {
+    // Hide API key input for Ollama (local)
     if (apiKeyContainer) {
         apiKeyContainer.style.display = currentProvider === 'ollama' ? 'none' : '';
     }
+    // Update the "Get API Key" link to the correct provider URL
+    if (getApiKeyLink && API_KEY_URLS[currentProvider]) {
+        getApiKeyLink.href = API_KEY_URLS[currentProvider];
+        getApiKeyLink.style.display = '';
+    } else if (getApiKeyLink) {
+        getApiKeyLink.style.display = 'none';
+    }
 }
 
-// Update status display
+// Update connection status text
 function updateStatus() {
     if (currentProvider === 'ollama') {
         if (ollamaConnected && currentModel) {
@@ -233,7 +275,10 @@ function updateStatus() {
     }
 }
 
-// Save settings to localStorage (per-provider)
+// -----------------------------------------------------------------------------
+// STORAGE
+// -----------------------------------------------------------------------------
+
 function saveToLocalStorage() {
     localStorage.setItem('ph_provider', currentProvider);
     localStorage.setItem(`ph_model_${currentProvider}`, currentModel);
@@ -242,19 +287,19 @@ function saveToLocalStorage() {
     }
 }
 
-// Load settings from localStorage
 async function loadFromLocalStorage() {
     const savedProvider = localStorage.getItem('ph_provider');
-
     if (savedProvider && document.querySelector(`option[value="${savedProvider}"]`)) {
         providerSelect.value = savedProvider;
         currentProvider = savedProvider;
+    } else {
+        // Default to Gemini per requirements
+        providerSelect.value = 'gemini';
+        currentProvider = 'gemini';
     }
 
-    // Populate model dropdown for the current provider
     await updateModels();
 
-    // Load saved model for current provider
     const savedModel = localStorage.getItem(`ph_model_${currentProvider}`);
     if (savedModel) {
         const models = currentProvider === 'ollama' ? MODELS.ollama : MODELS[currentProvider];
@@ -264,7 +309,6 @@ async function loadFromLocalStorage() {
         }
     }
 
-    // Load API key for current provider
     if (currentProvider !== 'ollama') {
         const savedApiKey = localStorage.getItem(`ph_apikey_${currentProvider}`);
         if (savedApiKey && apiKeyInput) {
@@ -277,123 +321,153 @@ async function loadFromLocalStorage() {
     updateStatus();
 }
 
+// -----------------------------------------------------------------------------
+// UI HELPERS (Visual Effects & Errors)
+// -----------------------------------------------------------------------------
 
-// Send message
+// NEW FEATURE: User Friendly Error Messages
+// Converts raw API errors (JSON/HTML dumps) into clean, readable alerts
+function formatFriendlyError(errorMessage) {
+    const lowerMsg = errorMessage.toLowerCase();
+    
+    // Check for Rate Limit / Quota (429)
+    if (lowerMsg.includes('quota') || lowerMsg.includes('rate limit') || lowerMsg.includes('429')) {
+        return `<span style="color: #e65100; font-weight: bold;">⚠️ Usage Limit Exceeded</span><br>
+                <span style="color: #666; font-size: 0.9em;">You've hit the rate limit for this provider. Please wait a moment or check your billing plan.</span>`;
+    }
+    
+    // Check for Auth Errors (401/403)
+    if (lowerMsg.includes('key') || lowerMsg.includes('auth') || lowerMsg.includes('401') || lowerMsg.includes('403')) {
+        return `<span style="color: #d32f2f; font-weight: bold;">⚠️ Authentication Failed</span><br>
+                <span style="color: #666; font-size: 0.9em;">Please check your API Key in the settings.</span>`;
+    }
+    
+    // Check for Model Errors (404)
+    if (lowerMsg.includes('model') || lowerMsg.includes('found') || lowerMsg.includes('404')) {
+        return `<span style="color: #d32f2f; font-weight: bold;">⚠️ Model Unavailable</span><br>
+                <span style="color: #666; font-size: 0.9em;">This model may be deprecated or unavailable. Please select a different one.</span>`;
+    }
+    
+    // Check for Overload (503/529)
+    if (lowerMsg.includes('overloaded') || lowerMsg.includes('capacity') || lowerMsg.includes('503')) {
+        return `<span style="color: #e65100; font-weight: bold;">⚠️ Provider Overloaded</span><br>
+                <span style="color: #666; font-size: 0.9em;">The AI service is currently busy. Please try again in a few seconds.</span>`;
+    }
+
+    // Default Fallback
+    const displayMsg = errorMessage.length > 150 ? errorMessage.substring(0, 150) + '...' : errorMessage;
+    return `<span style="color: #d32f2f;">⚠️ <strong>Error:</strong> ${displayMsg}</span>`;
+}
+
+// NEW FEATURE: Client-side Typewriter Effect
+// Simulates streaming visually without the risk of network stream errors
+async function typeWriter(displayElement, text) {
+    if (!text) return;
+    const words = text.split(/(\s+)/); // Split keeping whitespace
+    let currentText = '';
+    displayElement.innerHTML = '<span class="cursor">▌</span>';
+    
+    for (const word of words) {
+        currentText += word;
+        displayElement.innerHTML = formatResponse(currentText) + '<span class="cursor">▌</span>';
+        if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+        if (word.trim()) await new Promise(r => setTimeout(r, 15)); // Delay for effect
+    }
+    
+    // Final render without cursor
+    displayElement.innerHTML = formatResponse(text);
+    if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// -----------------------------------------------------------------------------
+// MESSAGING LOGIC
+// -----------------------------------------------------------------------------
+
 async function sendMessage() {
     const prompt = chatInput.value.trim();
     if (!prompt) return;
 
-    // Check Ollama connection
+    // Validation
     if (currentProvider === 'ollama' && !ollamaConnected) {
         alert('❌ Ollama is not connected. Please start Ollama and try again.');
         return;
     }
 
-    // Check API key for non-Ollama providers
     if (currentProvider !== 'ollama' && !apiKey) {
         alert('Please enter your API key first');
         return;
     }
 
-    // Hide welcome message when first message is sent
+    // UI Updates
     const welcomeMsg = document.querySelector('.welcome-message');
-    if (welcomeMsg) {
-        welcomeMsg.style.display = 'none';
-    }
+    if (welcomeMsg) welcomeMsg.style.display = 'none';
 
-    // Add user message to chat
     addMessageToChat('user', prompt);
     chatInput.value = '';
-
-    // Add to messages array
     messages.push({ role: 'user', content: prompt });
 
-    // Create assistant message placeholder
+    // Create placeholder for AI response
     const assistantDiv = addMessageToChat('assistant', '');
     const contentDiv = assistantDiv.querySelector('.message-content');
     contentDiv.innerHTML = '<span class="typing">Thinking...</span>';
 
     try {
         let response;
+        // Select API call based on provider
         switch (currentProvider) {
-            case 'ollama':
-                response = await callOllama(prompt, contentDiv);
-                break;
-            case 'openai':
-                response = await callOpenAI(prompt, contentDiv);
-                break;
-            case 'anthropic':
-                response = await callAnthropic(prompt, contentDiv);
-                break;
-            case 'gemini':
-                response = await callGemini(prompt, contentDiv);
-                break;
-            case 'github':
-                response = await callGitHub(prompt, contentDiv);
-                break;
-            case 'perplexity':
-                response = await callPerplexity(prompt, contentDiv);
-                break;
+            case 'ollama': response = await callOllama(prompt); break;
+            case 'openai': response = await callOpenAI(prompt); break;
+            case 'anthropic': response = await callAnthropic(prompt); break;
+            case 'gemini': response = await callGemini(prompt); break;
+            case 'github': response = await callGitHub(prompt); break;
+            case 'perplexity': response = await callPerplexity(prompt); break;
         }
 
         if (response) {
             messages.push({ role: 'assistant', content: response });
+            // Apply visual typewriter effect
+            await typeWriter(contentDiv, response);
         }
     } catch (error) {
-        contentDiv.innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
+        // Apply friendly error formatting
+        contentDiv.innerHTML = formatFriendlyError(error.message);
     }
-
-    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
-// Helper to handle **bold** and *italics* inside lines
+
+// -----------------------------------------------------------------------------
+// TEXT FORMATTING HELPERS
+// -----------------------------------------------------------------------------
+
 function parseInlineStyles(text) {
-    // Convert **bold** to <strong>
     let boldParsed = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-    // Convert *italic* to <em>
     return boldParsed.replace(/\*(.*?)\*/g, '<em>$1</em>');
 }
 
-// Convert Markdown response to HTML
 function formatResponse(text) {
     if (!text) return '';
-
-    // Split text into lines to handle lists properly
     let lines = text.split('\n');
     let htmlOutput = '';
     let inList = false;
 
     lines.forEach(line => {
         let trimmed = line.trim();
-
-        // Check for bullet points (starting with * or -)
         if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
-            if (!inList) {
-                htmlOutput += '<ul>'; // Start a new list
-                inList = true;
-            }
-            // Remove the bullet marker and wrap in <li>
+            if (!inList) { htmlOutput += '<ul>'; inList = true; }
             let content = trimmed.substring(2);
             htmlOutput += `<li>${parseInlineStyles(content)}</li>`;
         } else {
-            // Close list if we were in one
-            if (inList) {
-                htmlOutput += '</ul>';
-                inList = false;
-            }
-            // Handle regular paragraphs (skip empty lines)
-            if (trimmed.length > 0) {
-                htmlOutput += `<p>${parseInlineStyles(trimmed)}</p>`;
-            }
+            if (inList) { htmlOutput += '</ul>'; inList = false; }
+            if (trimmed.length > 0) htmlOutput += `<p>${parseInlineStyles(trimmed)}</p>`;
         }
     });
-
-    // Close any remaining open list
     if (inList) htmlOutput += '</ul>';
-
     return htmlOutput;
 }
 
-// Add message to chat display
+// -----------------------------------------------------------------------------
+// MESSAGE COMPONENT CREATION
+// -----------------------------------------------------------------------------
+
 function addMessageToChat(role, content) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}`;
@@ -411,26 +485,16 @@ function addMessageToChat(role, content) {
                     </button>
                 </div>
             </div>`;
-        // Set content using formatter (converts markdown to HTML)
-        if (content) {
-            messageDiv.querySelector('.message-content').innerHTML = formatResponse(content);
-        }
+        if (content) messageDiv.querySelector('.message-content').innerHTML = formatResponse(content);
 
-        // Add copy functionality
+        // Copy button logic
         const copyBtn = messageDiv.querySelector('.copy-btn');
         copyBtn.addEventListener('click', () => {
             const textContent = messageDiv.querySelector('.message-content').textContent;
             navigator.clipboard.writeText(textContent).then(() => {
-                copyBtn.innerHTML = `
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"></polyline>
-                    </svg>`;
+                copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"></polyline></svg>`;
                 setTimeout(() => {
-                    copyBtn.innerHTML = `
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                        </svg>`;
+                    copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
                 }, 2000);
             });
         });
@@ -441,20 +505,23 @@ function addMessageToChat(role, content) {
     chatMessages.appendChild(messageDiv);
     chatMessages.scrollTop = chatMessages.scrollHeight;
 
-    // Add click-to-edit for user messages (only last one is editable)
+    // Add click-to-edit logic
     if (role === 'user') {
         const contentDiv = messageDiv.querySelector('.message-content');
         contentDiv.addEventListener('click', () => handleEditMessage(messageDiv, contentDiv));
         updateEditableMessages();
     }
-
     return messageDiv;
 }
 
-// Update which user message is editable (only the last one)
+// -----------------------------------------------------------------------------
+// MESSAGE EDITING LOGIC
+// -----------------------------------------------------------------------------
+
 function updateEditableMessages() {
     const userMessages = chatMessages.querySelectorAll('.message.user .message-content');
     userMessages.forEach((el, index) => {
+        // Only the last message is editable
         if (index === userMessages.length - 1) {
             el.style.cursor = 'pointer';
             el.title = 'Click to edit and resend';
@@ -465,14 +532,11 @@ function updateEditableMessages() {
     });
 }
 
-// Handle editing a user message
 function handleEditMessage(messageDiv, contentDiv) {
-    // Only allow editing the last user message
     const userMessages = chatMessages.querySelectorAll('.message.user');
     const lastUserMessage = userMessages[userMessages.length - 1];
     if (messageDiv !== lastUserMessage) return;
 
-    // Check if already editing
     if (contentDiv.classList.contains('editing')) return;
 
     const originalText = contentDiv.textContent;
@@ -480,14 +544,13 @@ function handleEditMessage(messageDiv, contentDiv) {
     contentDiv.contentEditable = true;
     contentDiv.focus();
 
-    // Select all text
+    // Select text
     const range = document.createRange();
     range.selectNodeContents(contentDiv);
     const sel = window.getSelection();
     sel.removeAllRanges();
     sel.addRange(range);
 
-    // Handle key events
     const handleKeyDown = async (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -510,7 +573,6 @@ function handleEditMessage(messageDiv, contentDiv) {
     };
 
     const handleBlur = () => {
-        // Small delay to allow Enter key to process first
         setTimeout(() => {
             if (contentDiv.classList.contains('editing')) {
                 contentDiv.textContent = originalText;
@@ -525,21 +587,19 @@ function handleEditMessage(messageDiv, contentDiv) {
     contentDiv.addEventListener('blur', handleBlur);
 }
 
-// Resend edited message and regenerate response
 async function resendEditedMessage(userMessageDiv, newText) {
-    // Remove the last assistant message if it exists
+    // Remove last assistant response
     const allMessages = chatMessages.querySelectorAll('.message');
     const lastMessage = allMessages[allMessages.length - 1];
     if (lastMessage && lastMessage.classList.contains('assistant')) {
         lastMessage.remove();
-        messages.pop(); // Remove from messages array
+        messages.pop();
     }
 
-    // Update the user message text
     const contentDiv = userMessageDiv.querySelector('.message-content');
     contentDiv.textContent = newText;
 
-    // Update messages array (replace last user message)
+    // Update message history
     for (let i = messages.length - 1; i >= 0; i--) {
         if (messages[i].role === 'user') {
             messages[i].content = newText;
@@ -547,7 +607,6 @@ async function resendEditedMessage(userMessageDiv, newText) {
         }
     }
 
-    // Create new assistant message placeholder
     const assistantDiv = addMessageToChat('assistant', '');
     const assistantContent = assistantDiv.querySelector('.message-content');
     assistantContent.innerHTML = '<span class="typing">Thinking...</span>';
@@ -555,95 +614,62 @@ async function resendEditedMessage(userMessageDiv, newText) {
     try {
         let response;
         switch (currentProvider) {
-            case 'ollama':
-                response = await callOllama(newText, assistantContent);
-                break;
-            case 'openai':
-                response = await callOpenAI(newText, assistantContent);
-                break;
-            case 'anthropic':
-                response = await callAnthropic(newText, assistantContent);
-                break;
-            case 'gemini':
-                response = await callGemini(newText, assistantContent);
-                break;
-            case 'github':
-                response = await callGitHub(newText, assistantContent);
-                break;
-            case 'perplexity':
-                response = await callPerplexity(newText, assistantContent);
-                break;
+            case 'ollama': response = await callOllama(newText); break;
+            case 'openai': response = await callOpenAI(newText); break;
+            case 'anthropic': response = await callAnthropic(newText); break;
+            case 'gemini': response = await callGemini(newText); break;
+            case 'github': response = await callGitHub(newText); break;
+            case 'perplexity': response = await callPerplexity(newText); break;
         }
 
         if (response) {
             messages.push({ role: 'assistant', content: response });
+            await typeWriter(assistantContent, response);
         }
     } catch (error) {
-        assistantContent.innerHTML = `<span style="color: red;">Error: ${error.message}</span>`;
+        assistantContent.innerHTML = formatFriendlyError(error.message);
     }
-
-    chatMessages.scrollTop = chatMessages.scrollHeight;
 }
 
-// Ollama API call
-async function callOllama(prompt, displayElement) {
+// -----------------------------------------------------------------------------
+// API CALL FUNCTIONS
+// Note: Code is compacted here for efficiency. Logic returns full strings.
+// -----------------------------------------------------------------------------
+
+async function callOllama(prompt) {
     try {
         const response = await fetch('http://127.0.0.1:11434/api/chat', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 model: currentModel,
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...messages
-                ],
+                messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages],
                 stream: false
             })
         });
-
         if (!response.ok) throw new Error('Ollama request failed');
         const data = await response.json();
-        const content = data.message?.content || 'No response';
-        displayElement.innerHTML = formatResponse(content);
-        return content;
-    } catch (error) {
-        throw new Error(`Ollama: ${error.message}`);
-    }
+        return data.message?.content || 'No response';
+    } catch (error) { throw new Error(`Ollama: ${error.message}`); }
 }
 
-// OpenAI API call
-async function callOpenAI(prompt, displayElement) {
+async function callOpenAI(prompt) {
     try {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: currentModel,
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...messages
-                ]
+                messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages]
             })
         });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error?.message || 'OpenAI request failed');
-        }
+        if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || 'OpenAI request failed'); }
         const data = await response.json();
-        const content = data.choices[0]?.message?.content || 'No response';
-        displayElement.innerHTML = formatResponse(content);
-        return content;
-    } catch (error) {
-        throw new Error(`OpenAI: ${error.message}`);
-    }
+        return data.choices[0]?.message?.content || 'No response';
+    } catch (error) { throw new Error(`OpenAI: ${error.message}`); }
 }
 
-// Anthropic API call
-async function callAnthropic(prompt, displayElement) {
+async function callAnthropic(prompt) {
     try {
         const response = await fetch('https://api.anthropic.com/v1/messages', {
             method: 'POST',
@@ -660,29 +686,19 @@ async function callAnthropic(prompt, displayElement) {
                 messages: messages.map(m => ({ role: m.role, content: m.content }))
             })
         });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error?.message || 'Anthropic request failed');
-        }
+        if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || 'Anthropic request failed'); }
         const data = await response.json();
-        const content = data.content[0]?.text || 'No response';
-        displayElement.innerHTML = formatResponse(content);
-        return content;
-    } catch (error) {
-        throw new Error(`Anthropic: ${error.message}`);
-    }
+        return data.content[0]?.text || 'No response';
+    } catch (error) { throw new Error(`Anthropic: ${error.message}`); }
 }
 
-// Gemini API call
-async function callGemini(prompt, displayElement) {
+async function callGemini(prompt) {
     try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${currentModel}:generateContent?key=${apiKey}`;
         const contents = messages.map(msg => ({
             role: msg.role === 'assistant' ? 'model' : 'user',
             parts: [{ text: msg.content }]
         }));
-
         const response = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -691,96 +707,55 @@ async function callGemini(prompt, displayElement) {
                 systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] }
             })
         });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error?.message || 'Gemini request failed');
-        }
+        if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || 'Gemini request failed'); }
         const data = await response.json();
-        const content = data.candidates[0]?.content?.parts[0]?.text || 'No response';
-        displayElement.innerHTML = formatResponse(content);
-        return content;
-    } catch (error) {
-        throw new Error(`Gemini: ${error.message}`);
-    }
+        return data.candidates[0]?.content?.parts[0]?.text || 'No response';
+    } catch (error) { throw new Error(`Gemini: ${error.message}`); }
 }
 
-// GitHub Models API call
-async function callGitHub(prompt, displayElement) {
+async function callGitHub(prompt) {
     try {
         const response = await fetch('https://models.inference.ai.azure.com/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: currentModel,
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...messages
-                ]
+                messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages]
             })
         });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error?.message || 'GitHub Models request failed');
-        }
+        if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || 'GitHub Models request failed'); }
         const data = await response.json();
-        const content = data.choices[0]?.message?.content || 'No response';
-        displayElement.innerHTML = formatResponse(content);
-        return content;
-    } catch (error) {
-        throw new Error(`GitHub Models: ${error.message}`);
-    }
+        return data.choices[0]?.message?.content || 'No response';
+    } catch (error) { throw new Error(`GitHub Models: ${error.message}`); }
 }
 
-// Perplexity API call
-async function callPerplexity(prompt, displayElement) {
+async function callPerplexity(prompt) {
     try {
         const response = await fetch('https://api.perplexity.ai/chat/completions', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${apiKey}`
-            },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
             body: JSON.stringify({
                 model: currentModel,
-                messages: [
-                    { role: 'system', content: SYSTEM_PROMPT },
-                    ...messages
-                ]
+                messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages]
             })
         });
-
-        if (!response.ok) {
-            const err = await response.json();
-            throw new Error(err.error?.message || 'Perplexity request failed');
-        }
+        if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || 'Perplexity request failed'); }
         const data = await response.json();
-        const content = data.choices[0]?.message?.content || 'No response';
-        displayElement.innerHTML = formatResponse(content);
-        return content;
-    } catch (error) {
-        throw new Error(`Perplexity: ${error.message}`);
-    }
+        return data.choices[0]?.message?.content || 'No response';
+    } catch (error) { throw new Error(`Perplexity: ${error.message}`); }
 }
 
-// Theme management - 2 options (light/dark) with auto as default
+// -----------------------------------------------------------------------------
+// SIDEBAR RESIZER & THEME
+// -----------------------------------------------------------------------------
+
 function initTheme() {
     const themeToggle = document.getElementById('themeToggle');
     const savedTheme = localStorage.getItem('theme');
-
-    // If no saved theme, use system preference (auto behavior)
-    if (!savedTheme) {
-        applyTheme(null); // null = auto
-    } else {
-        applyTheme(savedTheme);
-    }
+    if (!savedTheme) applyTheme(null);
+    else applyTheme(savedTheme);
 
     themeToggle.addEventListener('click', () => {
-        // Toggle between light and dark
         const root = document.documentElement;
         const currentIsDark = root.hasAttribute('data-theme');
         const newTheme = currentIsDark ? 'light' : 'dark';
@@ -788,37 +763,20 @@ function initTheme() {
         applyTheme(newTheme);
     });
 
-    // Listen for system theme changes (only when no manual selection)
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-        if (!localStorage.getItem('theme')) {
-            applyTheme(null);
-        }
+        if (!localStorage.getItem('theme')) applyTheme(null);
     });
 }
 
 function applyTheme(theme) {
     const root = document.documentElement;
-    let isDark = false;
-
-    // If theme is null, follow system (auto)
-    if (theme === null) {
-        isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    } else {
-        isDark = theme === 'dark';
-    }
-
-    if (isDark) {
-        root.setAttribute('data-theme', 'dark');
-    } else {
-        root.removeAttribute('data-theme');
-    }
-
-    // Update button title
+    let isDark = theme === null ? window.matchMedia('(prefers-color-scheme: dark)').matches : theme === 'dark';
+    if (isDark) root.setAttribute('data-theme', 'dark');
+    else root.removeAttribute('data-theme');
     const themeToggle = document.getElementById('themeToggle');
     themeToggle.title = isDark ? 'Switch to light mode' : 'Switch to dark mode';
 }
 
-// Sidebar resizer
 function initSidebarResizer() {
     const resizer = document.getElementById('sidebarResizer');
     const sidebar = document.querySelector('.sidebar');
@@ -835,7 +793,7 @@ function initSidebarResizer() {
     document.addEventListener('mousemove', (e) => {
         if (!isResizing) return;
         const containerRect = document.querySelector('.container').getBoundingClientRect();
-        let newWidth = e.clientX - containerRect.left - 10; // 10px padding
+        let newWidth = e.clientX - containerRect.left - 10;
         newWidth = Math.max(200, Math.min(400, newWidth));
         sidebar.style.width = newWidth + 'px';
         localStorage.setItem('sidebarWidth', newWidth);
@@ -850,14 +808,14 @@ function initSidebarResizer() {
         }
     });
 
-    // Restore saved width
     const savedWidth = localStorage.getItem('sidebarWidth');
-    if (savedWidth) {
-        sidebar.style.width = savedWidth + 'px';
-    }
+    if (savedWidth) sidebar.style.width = savedWidth + 'px';
 }
 
-// Initialize when DOM is ready
+// -----------------------------------------------------------------------------
+// APP ENTRY POINT
+// -----------------------------------------------------------------------------
+
 document.addEventListener('DOMContentLoaded', () => {
     init();
     initTheme();

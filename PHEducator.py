@@ -106,6 +106,15 @@ def render_model_select(label, models, provider_key):
 
     return selected
 
+# API Key URLs for each provider
+API_KEY_URLS = {
+    "openai": "https://platform.openai.com/api-keys",
+    "anthropic": "https://console.anthropic.com/settings/keys",
+    "gemini": "https://aistudio.google.com/app/apikey",
+    "github": "https://github.com/settings/personal-access-tokens",
+    "perplexity": "https://www.perplexity.ai/settings/api"
+}
+
 # Helper function to render API key input with two-state design
 def render_api_key_input(provider_key, label):
     has_key = bool(st.session_state.api_keys[provider_key])
@@ -150,27 +159,31 @@ def render_api_key_input(provider_key, label):
                     localS.setItem(f"ph_apikey_{provider_key}", new_key, key=f"set_apikey_{provider_key}")
                     st.rerun()
 
+    # Add "Get API Key" link below the input
+    if provider_key in API_KEY_URLS:
+        st.markdown(f"[Get API Key 🔑]({API_KEY_URLS[provider_key]})", unsafe_allow_html=True)
+
     return st.session_state.api_keys[provider_key]
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
     st.header("Settings")
 
-    # Provider Selection with localStorage persistence
-    provider_options = ["Ollama (Local)", "OpenAI", "Anthropic", "Google Gemini", "GitHub Models", "Perplexity"]
+    # Provider Selection with localStorage persistence (Google Gemini as default)
+    provider_options = ["Google Gemini", "Ollama (Local)", "OpenAI", "Anthropic", "GitHub Models", "Perplexity"]
 
     # Map provider names to match web version format
     provider_map = {
+        "Google Gemini": "gemini",
         "Ollama (Local)": "ollama",
         "OpenAI": "openai",
         "Anthropic": "anthropic",
-        "Google Gemini": "gemini",
         "GitHub Models": "github",
         "Perplexity": "perplexity"
     }
     reverse_provider_map = {v: k for k, v in provider_map.items()}
 
-    # Determine default index from localStorage
+    # Determine default index from localStorage (default to Google Gemini = index 0)
     default_index = 0
     if saved_provider and saved_provider in reverse_provider_map:
         try:
@@ -608,8 +621,13 @@ if prompt := st.chat_input("Ask a health question..."):
             response_placeholder.markdown(full_response)
 
         except Exception as e:
-            st.error(f"Error generating response: {str(e)}")
-            full_response = "Sorry, I encountered an error. Please check your API key and try again."
+            error_msg = str(e)
+            # Simplify quota exceeded errors
+            if "quota" in error_msg.lower() or "rate" in error_msg.lower():
+                st.error("Rate limit exceeded. Please wait a moment and try again.")
+            else:
+                st.error(f"Error: {error_msg}")
+            full_response = "Sorry, I encountered an error. Please try again."
             response_placeholder.markdown(full_response)
 
     # 3. Save AI message to history

@@ -17,16 +17,16 @@
             <div class="setting-group">
                 <label for="provider">Select Provider</label>
                 <select id="provider">
+                    <option value="gemini">Google Gemini</option>
                     <option value="ollama">Ollama (Local)</option>
                     <option value="openai">OpenAI</option>
                     <option value="anthropic">Anthropic</option>
-                    <option value="gemini">Google Gemini</option>
                     <option value="github">GitHub Models</option>
                     <option value="perplexity">Perplexity</option>
                 </select>
             </div>
 
-            <div class="setting-group">
+            <div class="setting-group" id="apiKeyGroup">
                 <label for="apiKey">API Key</label>
                 <div class="api-key-container">
                     <input type="password" id="apiKey" placeholder="Enter your API key">
@@ -34,6 +34,9 @@
                         👁️
                     </button>
                 </div>
+                <a href="#" id="getApiKeyLink" class="get-api-key-link" target="_blank">
+                    Get API Key 🔑
+                </a>
             </div>
 
             <div class="setting-group">
